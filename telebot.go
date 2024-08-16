@@ -46,8 +46,6 @@ const (
 	// Basic message handlers.
 	OnCommand              = "\acommand"
 	OnText                 = "\atext"
-	OnForward              = "\aforward"
-	OnReply                = "\areply"
 	OnEdited               = "\aedited"
 	OnPhoto                = "\aphoto"
 	OnAudio                = "\aaudio"
@@ -121,6 +119,8 @@ const (
 	OnBusinessMessage         = "\abusiness_message"
 	OnEditedBusinessMessage   = "\aedited_business_message"
 	OnDeletedBusinessMessages = "\adeleted_business_messages"
+
+	OnAny = "\aany"
 )
 
 // ChatAction is a client-side status indicating bot activity.

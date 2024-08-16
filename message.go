@@ -25,27 +25,6 @@ type Message struct {
 	// Sender of the message, sent on behalf of a chat.
 	SenderChat *Chat `json:"sender_chat"`
 
-	// For forwarded messages, sender of the original message.
-	OriginalSender *User `json:"forward_from"`
-
-	// For forwarded messages, chat of the original message when
-	// forwarded from a channel.
-	OriginalChat *Chat `json:"forward_from_chat"`
-
-	// For forwarded messages, identifier of the original message
-	// when forwarded from a channel.
-	OriginalMessageID int `json:"forward_from_message_id"`
-
-	// For forwarded messages, signature of the post author.
-	OriginalSignature string `json:"forward_signature"`
-
-	// For forwarded messages, sender's name from users who
-	// disallow adding a link to their account.
-	OriginalSenderName string `json:"forward_sender_name"`
-
-	// For forwarded messages, unixtime of the original message.
-	OriginalUnixtime int `json:"forward_date"`
-
 	// For information about the original message for forwarded messages.
 	Origin *MessageOrigin `json:"forward_origin"`
 
@@ -451,7 +430,7 @@ func (m *Message) LastEdited() time.Time {
 // IsForwarded says whether message is forwarded copy of another
 // message or not.
 func (m *Message) IsForwarded() bool {
-	return m.OriginalSender != nil || m.OriginalChat != nil
+	return m.Origin != nil
 }
 
 // IsReply says whether message is a reply to another message.

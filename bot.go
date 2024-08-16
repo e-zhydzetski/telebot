@@ -42,9 +42,10 @@ func NewBot(pref Settings) (*Bot, error) {
 		Poller:  pref.Poller,
 		onError: pref.OnError,
 
-		Updates:  make(chan Update, pref.Updates),
-		handlers: make(map[string]HandlerFunc),
-		stop:     make(chan chan struct{}),
+		Updates:         make(chan Update, pref.Updates),
+		handlers:        make(map[string]HandlerFunc),
+		fallbackHandler: noopHandler,
+		stop:            make(chan chan struct{}),
 
 		synchronous: pref.Synchronous,
 		verbose:     pref.Verbose,
@@ -63,6 +64,7 @@ func NewBot(pref Settings) (*Bot, error) {
 	}
 
 	bot.group = bot.Group()
+
 	return bot, nil
 }
 
@@ -75,13 +77,14 @@ type Bot struct {
 	Poller  Poller
 	onError func(error, Context)
 
-	group       *Group
-	handlers    map[string]HandlerFunc
-	synchronous bool
-	verbose     bool
-	parseMode   ParseMode
-	stop        chan chan struct{}
-	client      *http.Client
+	group           *Group
+	handlers        map[string]HandlerFunc
+	fallbackHandler HandlerFunc
+	synchronous     bool
+	verbose         bool
+	parseMode       ParseMode
+	stop            chan chan struct{}
+	client          *http.Client
 
 	stopMu     sync.RWMutex
 	stopClient chan struct{}
@@ -150,6 +153,8 @@ func (b *Bot) Group() *Group {
 // Use adds middleware to the global bot chain.
 func (b *Bot) Use(middleware ...MiddlewareFunc) {
 	b.group.Use(middleware...)
+
+	b.fallbackHandler = applyMiddleware(noopHandler, b.group.middleware...)
 }
 
 var (

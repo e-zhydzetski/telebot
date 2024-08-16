@@ -33,247 +33,195 @@ type Update struct {
 // ProcessUpdate processes a single incoming update.
 // A started bot calls this function automatically.
 func (b *Bot) ProcessUpdate(u Update) {
-	b.ProcessContext(b.NewContext(u))
+	handler := b.SelectHandlerForUpdate(&u)
+	if handler == nil {
+		// noop handler with global middleware
+		handler = b.fallbackHandler
+	}
+	c := b.NewContext(u)
+	b.runHandler(handler, c)
 }
 
-// ProcessContext processes the given context.
-// A started bot calls this function automatically.
-func (b *Bot) ProcessContext(c Context) {
-	u := c.Update()
-
+// SelectHandlerForUpdate selects the best handler for update
+// The update may be modified
+// Return nil if no handler registered
+func (b *Bot) SelectHandlerForUpdate(u *Update) HandlerFunc {
 	if u.Message != nil {
 		m := u.Message
 
 		if m.PinnedMessage != nil {
-			b.handle(OnPinned, c)
-			return
+			return b.getHandler(OnPinned)
 		}
 
-		if m.Origin != nil {
-			b.handle(OnForward, c)
-		}
+		// Escape malicious messages
+		m.Text = strings.TrimLeft(m.Text, "\a")
 
-		// Commands
 		if m.Text != "" {
-			// Filtering malicious messages
-			if m.Text[0] == '\a' {
-				return
-			}
-
 			match := cmdRx.FindAllStringSubmatch(m.Text, -1)
 			if match != nil {
 				// Syntax: "</command>@<bot> <payload>"
 				command, botName := match[0][1], match[0][3]
 
 				if botName != "" && !strings.EqualFold(b.Me.Username, botName) {
-					return
+					return nil
 				}
 
 				m.Command = command
 				m.Payload = match[0][5]
-				if b.handle(command, c) {
-					return
+				if h := b.getHandler(command); h != nil {
+					return h
 				}
 
-				if b.handle(OnCommand, c) {
-					return
+				if h := b.getHandler(OnCommand); h != nil {
+					return h
 				}
 			}
 
 			// 1:1 satisfaction
-			if b.handle(m.Text, c) {
-				return
+			if h := b.getHandler(m.Text); h != nil {
+				return h
 			}
 
-			if m.ReplyTo != nil {
-				b.handle(OnReply, c)
-			}
-
-			b.handle(OnText, c)
-			return
+			return b.getHandler(OnText)
 		}
 
-		if b.handleMedia(c) {
-			return
+		if h, isMedia := b.getMediaHandler(m); isMedia {
+			return h
 		}
 
 		if m.Contact != nil {
-			b.handle(OnContact, c)
-			return
+			return b.getHandler(OnContact)
 		}
 		if m.Location != nil {
-			b.handle(OnLocation, c)
-			return
+			return b.getHandler(OnLocation)
 		}
 		if m.Venue != nil {
-			b.handle(OnVenue, c)
-			return
+			return b.getHandler(OnVenue)
 		}
 		if m.Game != nil {
-			b.handle(OnGame, c)
-			return
+			return b.getHandler(OnGame)
 		}
 		if m.Dice != nil {
-			b.handle(OnDice, c)
-			return
+			return b.getHandler(OnDice)
 		}
 		if m.Invoice != nil {
-			b.handle(OnInvoice, c)
-			return
+			return b.getHandler(OnInvoice)
 		}
 		if m.Payment != nil {
-			b.handle(OnPayment, c)
-			return
+			return b.getHandler(OnPayment)
 		}
 		if m.RefundedPayment != nil {
-			b.handle(OnRefund, c)
-			return
+			return b.getHandler(OnRefund)
 		}
 		if m.TopicCreated != nil {
-			b.handle(OnTopicCreated, c)
-			return
+			return b.getHandler(OnTopicCreated)
 		}
 		if m.TopicReopened != nil {
-			b.handle(OnTopicReopened, c)
-			return
+			return b.getHandler(OnTopicReopened)
 		}
 		if m.TopicClosed != nil {
-			b.handle(OnTopicClosed, c)
-			return
+			return b.getHandler(OnTopicClosed)
 		}
 		if m.TopicEdited != nil {
-			b.handle(OnTopicEdited, c)
-			return
+			return b.getHandler(OnTopicEdited)
 		}
 		if m.GeneralTopicHidden != nil {
-			b.handle(OnGeneralTopicHidden, c)
-			return
+			return b.getHandler(OnGeneralTopicHidden)
 		}
 		if m.GeneralTopicUnhidden != nil {
-			b.handle(OnGeneralTopicUnhidden, c)
-			return
+			return b.getHandler(OnGeneralTopicUnhidden)
 		}
 		if m.WriteAccessAllowed != nil {
-			b.handle(OnWriteAccessAllowed, c)
-			return
+			return b.getHandler(OnWriteAccessAllowed)
 		}
 
 		wasAdded := (m.UserJoined != nil && m.UserJoined.ID == b.Me.ID) ||
 			(m.UsersJoined != nil && isUserInList(b.Me, m.UsersJoined))
 		if m.GroupCreated || m.SuperGroupCreated || wasAdded {
-			b.handle(OnAddedToGroup, c)
-			return
+			return b.getHandler(OnAddedToGroup)
 		}
 
-		if m.UserJoined != nil {
-			b.handle(OnUserJoined, c)
-			return
+		if m.UserJoined != nil || m.UsersJoined != nil {
+			return b.getHandler(OnUserJoined)
 		}
-		if m.UsersJoined != nil {
-			for _, user := range m.UsersJoined {
-				m.UserJoined = &user
-				b.handle(OnUserJoined, c)
-			}
-			return
-		}
+
 		if m.UserLeft != nil {
-			b.handle(OnUserLeft, c)
-			return
+			b.getHandler(OnUserLeft)
 		}
 
 		if m.UserShared != nil {
-			b.handle(OnUserShared, c)
-			return
+			b.getHandler(OnUserShared)
 		}
 		if m.ChatShared != nil {
-			b.handle(OnChatShared, c)
-			return
+			b.getHandler(OnChatShared)
 		}
 
 		if m.NewGroupTitle != "" {
-			b.handle(OnNewGroupTitle, c)
-			return
+			b.getHandler(OnNewGroupTitle)
 		}
 		if m.NewGroupPhoto != nil {
-			b.handle(OnNewGroupPhoto, c)
-			return
+			b.getHandler(OnNewGroupPhoto)
 		}
 		if m.GroupPhotoDeleted {
-			b.handle(OnGroupPhotoDeleted, c)
-			return
+			b.getHandler(OnGroupPhotoDeleted)
 		}
 
 		if m.GroupCreated {
-			b.handle(OnGroupCreated, c)
-			return
+			b.getHandler(OnGroupCreated)
 		}
 		if m.SuperGroupCreated {
-			b.handle(OnSuperGroupCreated, c)
-			return
+			b.getHandler(OnSuperGroupCreated)
 		}
 		if m.ChannelCreated {
-			b.handle(OnChannelCreated, c)
-			return
+			b.getHandler(OnChannelCreated)
 		}
 
 		if m.MigrateTo != 0 {
 			m.MigrateFrom = m.Chat.ID
-			b.handle(OnMigration, c)
-			return
+			b.getHandler(OnMigration)
 		}
 
 		if m.VideoChatStarted != nil {
-			b.handle(OnVideoChatStarted, c)
-			return
+			b.getHandler(OnVideoChatStarted)
 		}
 		if m.VideoChatEnded != nil {
-			b.handle(OnVideoChatEnded, c)
-			return
+			b.getHandler(OnVideoChatEnded)
 		}
 		if m.VideoChatParticipants != nil {
-			b.handle(OnVideoChatParticipants, c)
-			return
+			b.getHandler(OnVideoChatParticipants)
 		}
 		if m.VideoChatScheduled != nil {
-			b.handle(OnVideoChatScheduled, c)
-			return
+			b.getHandler(OnVideoChatScheduled)
 		}
 
 		if m.WebAppData != nil {
-			b.handle(OnWebApp, c)
-			return
+			b.getHandler(OnWebApp)
 		}
 
 		if m.ProximityAlert != nil {
-			b.handle(OnProximityAlert, c)
-			return
+			b.getHandler(OnProximityAlert)
 		}
 		if m.AutoDeleteTimer != nil {
-			b.handle(OnAutoDeleteTimer, c)
-			return
+			b.getHandler(OnAutoDeleteTimer)
 		}
 	}
 
 	if u.EditedMessage != nil {
-		b.handle(OnEdited, c)
-		return
+		b.getHandler(OnEdited)
 	}
 
 	if u.ChannelPost != nil {
 		m := u.ChannelPost
 
 		if m.PinnedMessage != nil {
-			b.handle(OnPinned, c)
-			return
+			b.getHandler(OnPinned)
 		}
 
-		b.handle(OnChannelPost, c)
-		return
+		b.getHandler(OnChannelPost)
 	}
 
 	if u.EditedChannelPost != nil {
-		b.handle(OnEditedChannelPost, c)
-		return
+		b.getHandler(OnEditedChannelPost)
 	}
 
 	if u.Callback != nil {
@@ -281,128 +229,106 @@ func (b *Bot) ProcessContext(c Context) {
 			match := cbackRx.FindAllStringSubmatch(data, -1)
 			if match != nil {
 				unique, payload := match[0][1], match[0][3]
-				if handler, ok := b.handlers["\f"+unique]; ok {
+				if h := b.getHandler("\f" + unique); h != nil {
 					u.Callback.Unique = unique
 					u.Callback.Data = payload
-					b.runHandler(handler, c)
-					return
+					return h
 				}
 			}
 		}
 
-		b.handle(OnCallback, c)
-		return
+		return b.getHandler(OnCallback)
 	}
 
 	if u.Query != nil {
-		b.handle(OnQuery, c)
-		return
+		return b.getHandler(OnQuery)
 	}
 
 	if u.InlineResult != nil {
-		b.handle(OnInlineResult, c)
-		return
+		return b.getHandler(OnInlineResult)
 	}
 
 	if u.ShippingQuery != nil {
-		b.handle(OnShipping, c)
-		return
+		return b.getHandler(OnShipping)
 	}
 
 	if u.PreCheckoutQuery != nil {
-		b.handle(OnCheckout, c)
-		return
+		return b.getHandler(OnCheckout)
 	}
 
 	if u.Poll != nil {
-		b.handle(OnPoll, c)
-		return
+		return b.getHandler(OnPoll)
 	}
 	if u.PollAnswer != nil {
-		b.handle(OnPollAnswer, c)
-		return
+		return b.getHandler(OnPollAnswer)
 	}
 
 	if u.MyChatMember != nil {
-		b.handle(OnMyChatMember, c)
-		return
+		return b.getHandler(OnMyChatMember)
 	}
 	if u.ChatMember != nil {
-		b.handle(OnChatMember, c)
-		return
+		return b.getHandler(OnChatMember)
 	}
 	if u.ChatJoinRequest != nil {
-		b.handle(OnChatJoinRequest, c)
-		return
+		return b.getHandler(OnChatJoinRequest)
 	}
 
 	if u.Boost != nil {
-		b.handle(OnBoost, c)
-		return
+		return b.getHandler(OnBoost)
 	}
 	if u.BoostRemoved != nil {
-		b.handle(OnBoostRemoved, c)
-		return
+		return b.getHandler(OnBoostRemoved)
 	}
 
 	if u.BusinessConnection != nil {
-		b.handle(OnBusinessConnection, c)
-		return
+		return b.getHandler(OnBusinessConnection)
 	}
 	if u.BusinessMessage != nil {
-		b.handle(OnBusinessMessage, c)
-		return
+		return b.getHandler(OnBusinessMessage)
 	}
 	if u.EditedBusinessMessage != nil {
-		b.handle(OnEditedBusinessMessage, c)
-		return
+		return b.getHandler(OnEditedBusinessMessage)
 	}
 	if u.DeletedBusinessMessages != nil {
-		b.handle(OnDeletedBusinessMessages, c)
-		return
+		return b.getHandler(OnDeletedBusinessMessages)
 	}
+
+	return b.getHandler(OnAny)
 }
 
-func (b *Bot) handle(end string, c Context) bool {
-	if handler, ok := b.handlers[end]; ok {
-		b.runHandler(handler, c)
-		return true
-	}
-	return false
+func (b *Bot) getHandler(end string) HandlerFunc {
+	return b.handlers[end]
 }
 
-func (b *Bot) handleMedia(c Context) bool {
-	var (
-		m     = c.Message()
-		fired = true
-	)
-
+func (b *Bot) getMediaHandler(m *Message) (h HandlerFunc, isMedia bool) {
 	switch {
 	case m.Photo != nil:
-		fired = b.handle(OnPhoto, c)
+		h = b.getHandler(OnPhoto)
 	case m.Voice != nil:
-		fired = b.handle(OnVoice, c)
+		h = b.getHandler(OnVoice)
 	case m.Audio != nil:
-		fired = b.handle(OnAudio, c)
+		h = b.getHandler(OnAudio)
 	case m.Animation != nil:
-		fired = b.handle(OnAnimation, c)
+		h = b.getHandler(OnAnimation)
 	case m.Document != nil:
-		fired = b.handle(OnDocument, c)
+		h = b.getHandler(OnDocument)
 	case m.Sticker != nil:
-		fired = b.handle(OnSticker, c)
+		h = b.getHandler(OnSticker)
 	case m.Video != nil:
-		fired = b.handle(OnVideo, c)
+		h = b.getHandler(OnVideo)
 	case m.VideoNote != nil:
-		fired = b.handle(OnVideoNote, c)
+		h = b.getHandler(OnVideoNote)
 	default:
-		return false
+		return nil, false
 	}
 
-	if !fired {
-		return b.handle(OnMedia, c)
+	isMedia = true
+
+	if h == nil { // no specific media type handler, try general
+		h = b.getHandler(OnMedia)
 	}
 
-	return true
+	return
 }
 
 func (b *Bot) runHandler(h HandlerFunc, c Context) {

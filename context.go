@@ -11,6 +11,10 @@ import (
 // used to handle actual endpoints.
 type HandlerFunc func(Context) error
 
+func noopHandler(_ Context) error {
+	return nil
+}
+
 // NewContext returns a new native context object,
 // field by the passed update.
 func NewContext(b API, u Update) Context {

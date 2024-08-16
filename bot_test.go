@@ -243,7 +243,7 @@ func TestBotProcessUpdate(t *testing.T) {
 		return nil
 	})
 	b.Handle(OnUserJoined, func(c Context) error {
-		assert.NotNil(t, c.Message().UserJoined)
+		assert.True(t, c.Message().UserJoined != nil || len(c.Message().UsersJoined) > 0)
 		return nil
 	})
 	b.Handle(OnUserLeft, func(c Context) error {
