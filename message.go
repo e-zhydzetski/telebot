@@ -99,6 +99,9 @@ type Message struct {
 	// For a text message, the actual UTF-8 text of the message.
 	Text string `json:"text"`
 
+	// For a command message, the actual command name.
+	Command string `json:"-"`
+
 	// For registered commands, will contain the string payload:
 	//
 	// Ex: `/command <payload>` or `/command@botname <payload>`

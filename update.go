@@ -69,8 +69,13 @@ func (b *Bot) ProcessContext(c Context) {
 					return
 				}
 
+				m.Command = command
 				m.Payload = match[0][5]
 				if b.handle(command, c) {
+					return
+				}
+
+				if b.handle(OnCommand, c) {
 					return
 				}
 			}

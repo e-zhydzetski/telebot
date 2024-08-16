@@ -44,6 +44,7 @@ const DefaultApiURL = "https://api.telegram.org"
 // an "alert" character \a.
 const (
 	// Basic message handlers.
+	OnCommand              = "\acommand"
 	OnText                 = "\atext"
 	OnForward              = "\aforward"
 	OnReply                = "\areply"
