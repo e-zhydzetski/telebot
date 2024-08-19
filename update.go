@@ -35,6 +35,9 @@ type Update struct {
 func (b *Bot) ProcessUpdate(u Update) {
 	handler := b.SelectHandlerForUpdate(&u)
 	if handler == nil {
+		handler = b.getHandler(OnAny)
+	}
+	if handler == nil {
 		// noop handler with global middleware
 		handler = b.fallbackHandler
 	}
@@ -293,7 +296,7 @@ func (b *Bot) SelectHandlerForUpdate(u *Update) HandlerFunc {
 		return b.getHandler(OnDeletedBusinessMessages)
 	}
 
-	return b.getHandler(OnAny)
+	return nil
 }
 
 func (b *Bot) getHandler(end string) HandlerFunc {
